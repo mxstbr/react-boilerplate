@@ -10,7 +10,7 @@ import 'react-app-polyfill/stable';
 
 import React from 'react';
 import ReactDOM from 'react-dom';
-import PropTypes from 'prop-types';
+// import PropTypes from 'prop-types';
 import { Provider } from 'react-redux';
 import { ConnectedRouter } from 'connected-react-router';
 import history from 'utils/history';
@@ -31,17 +31,14 @@ import 'file-loader?name=.htaccess!./.htaccess';
 import { HelmetProvider } from 'react-helmet-async';
 import configureStore from './configureStore';
 
-// Import i18n messages
-import { translationMessages } from './i18n';
-
 // Create redux store with history
 const initialState = {};
 const store = configureStore(initialState, history);
 const MOUNT_NODE = document.getElementById('app');
 
-const ConnectedApp = props => (
+const ConnectedApp = () => (
   <Provider store={store}>
-    <LanguageProvider messages={props.messages}>
+    <LanguageProvider>
       <ConnectedRouter history={history}>
         <HelmetProvider>
           <App />
@@ -51,36 +48,52 @@ const ConnectedApp = props => (
   </Provider>
 );
 
-ConnectedApp.propTypes = {
-  messages: PropTypes.object,
-};
+ConnectedApp.propTypes = {};
 
-const render = messages => {
-  ReactDOM.render(<ConnectedApp messages={messages} />, MOUNT_NODE);
+const render = () => {
+  ReactDOM.render(<ConnectedApp />, MOUNT_NODE);
 };
 
 if (module.hot) {
+  // Hot reloadable React components and translation json files
   // Hot reloadable translation json files
   // modules.hot.accept does not accept dynamic dependencies,
   // have to be constants at compile-time
   module.hot.accept(['./i18n'], () => {
     ReactDOM.unmountComponentAtNode(MOUNT_NODE);
-    render(translationMessages);
+    render();
   });
 }
 
 // Chunked polyfill for browsers without Intl support
-if (!window.Intl) {
+if (!Intl.PluralRules || !Intl.RelativeTimeFormat) {
   new Promise(resolve => {
-    resolve(import('intl'));
+    if (!Intl.PluralRules) {
+      resolve(
+        Promise.all([
+          import('@formatjs/intl-pluralrules/polyfill'),
+          import('@formatjs/intl-pluralrules/dist/locale-data/en'),
+        ]),
+      );
+    } else {
+      resolve();
+    }
   })
-    .then(() => Promise.all([import('intl/locale-data/jsonp/en.js')]))
-    .then(() => render(translationMessages))
+    .then(() => {
+      if (!Intl.RelativeTimeFormat) {
+        return Promise.all([
+          import('@formatjs/intl-relativetimeformat/polyfill'),
+          import('@formatjs/intl-relativetimeformat/dist/locale-data/en'),
+        ]);
+      }
+      return Promise.resolve();
+    }) // eslint-disable-line prettier/prettier
+    .then(() => render())
     .catch(err => {
       throw err;
     });
 } else {
-  render(translationMessages);
+  render();
 }
 
 // Install ServiceWorker and AppCache in the end since
